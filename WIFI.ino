@@ -1,4 +1,3 @@
-
 #include <HTTPClient.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -81,23 +80,24 @@ void loop() {
         Serial.println(error.c_str());
         return;
       }
-      bool rent = true;
+      bool rent = doc["rent"];
       if (WiFi.status() == WL_CONNECTED) {
       HTTPClient http;
       http.setTimeout(20000); 
-      http.addHeader("Content-Type", "application/json");  // Set the content type to JSON
-      const char* professorToken = doc["professorToken"];
-      http.addHeader("x-access-token",professorToken);
       if(!rent)
       {
+
         int projectorId = doc["projectorId"];
         int professorId = doc["professorId"];
         std::string startDate = doc["startDate"];
-        std::string RETURN_API_HISTORY = BACKEND_HISTORY_API + std::to_string(projectorId);
-        http.begin(RETURN_API_HISTORY.c_str()); // Replace with your desired API endpoint
+        std::string professorToken = doc["professorToken"];
+        Serial.println(professorToken.c_str());
+        http.begin(BACKEND_HISTORY_API.c_str()); // Replace with your desired API endpoint
+        http.addHeader("x-access-token",professorToken.c_str());    
+        http.addHeader("Content-Type", "application/json");  // Set the content type to JSON   
         std::string body = "{\"proj_id\":" + std::to_string(projectorId) + ",\"user_id\":" + std::to_string(professorId) + ",\"start_date\":\"" + startDate + "\"}";
         Serial.println(body.c_str());
-        int httpCode = http.PUT(body.c_str());
+        int httpCode = http.POST(body.c_str());
 
         if (httpCode > 0) 
         {
@@ -115,12 +115,18 @@ void loop() {
     {
         int projectorId = doc["projectorId"];
         std::string endDate = doc["endDate"];
+        std::string professorToken = doc["professorToken"];
+        http.addHeader("Content-Type", "application/json");  // Set the content type to JSON
+        Serial.println(professorToken.c_str());        
+    
         Serial.println(projectorId);
         std::string idHyst = std::to_string(projectorId);
         std::string api_endpoint = BACKEND_HISTORY_API + idHyst;
         http.begin(api_endpoint.c_str());
+        http.addHeader("Content-Type", "application/json");  // Set the content type to JSON  
+        http.addHeader("x-access-token",professorToken.c_str());   
         std::string body = "{\"end_date\":\""+endDate+"\"}";
-        int httpCode = http.POST(body.c_str());
+        int httpCode = http.PUT(body.c_str());
         if (httpCode > 0) 
         {
           std::string payload = std::string(http.getString().c_str());
@@ -135,11 +141,10 @@ void loop() {
     }
     http.end();
   }
+  delay(5000);
   readInChunks(response,20);
   json = "";
   pCharacteristic->setValue("");
   }
   delay(2000);
 }
-
-     
