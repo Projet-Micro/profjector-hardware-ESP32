@@ -1,4 +1,4 @@
-#include <WiFi.h>
+
 #include <HTTPClient.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -9,12 +9,30 @@ char* SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214";
 char* CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 char* WIFI_ID = "Faten";
 char* WIFI_PASS = "70735987-*";
-char* BACKEND_HISTORY_API = "https://profjector-back.onrender.com/api/Hystoriques";
+std::string BACKEND_HISTORY_API = "https://profjector-back.onrender.com/api/Hystoriques/";
 std::string json= "";
-StaticJsonDocument<384> doc;
+StaticJsonDocument<420> doc;
 char* professorToken = "";
 char* startDate= "";
+char url[300];
+std::string response;
+BLECharacteristic* pCharacteristic = NULL;
 BLEAdvertising* pAdvertising = NULL;
+void readInChunks(const std::string& inputString, int chunkSize) {
+    int totalLength = inputString.length();
+    int offset = 0;
+
+    while (offset < totalLength) {
+        // Get the next chunk (up to 20 characters)
+        std::string chunk = inputString.substr(offset, chunkSize);
+
+        // Process the chunk (you can replace this with your own logic)
+        pCharacteristic->setValue(chunk);
+        pCharacteristic->notify();
+        // Move to the next chunk
+        offset += chunkSize;
+    }
+}
 class MyServerCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
       // NOTHING
@@ -25,7 +43,6 @@ class MyServerCallbacks : public BLEServerCallbacks {
     }
 };
 
-BLECharacteristic* pCharacteristic = NULL;
 void setup() {
   Serial.begin(115200);
   BLEDevice::init("ESP32");
@@ -54,36 +71,71 @@ void setup() {
 
 void loop() {
   json = pCharacteristic->getValue();
-  Serial.println(json.c_str());
+
   if(!json.empty()){
+      Serial.println(json.c_str());
       DeserializationError error = deserializeJson(doc, json);
-      if (error) {
+      if (error) 
+      {
         Serial.print("deserializeJson() failed: ");
         Serial.println(error.c_str());
         return;
       }
-      int projectorId = doc["projectorId"];
-      int professorId = doc["professorId"];
-      const char* professorToken = doc["professorToken"];
-      const char* startDate = doc["startDate"];
+      bool rent = true;
       if (WiFi.status() == WL_CONNECTED) {
       HTTPClient http;
-      http.begin(BACKEND_HISTORY_API); // Replace with your desired API endpoint
+      http.setTimeout(20000); 
       http.addHeader("Content-Type", "application/json");  // Set the content type to JSON
+      const char* professorToken = doc["professorToken"];
       http.addHeader("x-access-token",professorToken);
-      std::string body = "{\"proj_id\":" + std::to_string(projectorId) + ",\"user_id\":" + std::to_string(professorId) + ",\"start_date\":\"" + startDate + "\"}";
-      Serial.println(body.c_str());
-      int httpCode = http.POST(body.c_str());
+      if(!rent)
+      {
+        int projectorId = doc["projectorId"];
+        int professorId = doc["professorId"];
+        std::string startDate = doc["startDate"];
+        std::string RETURN_API_HISTORY = BACKEND_HISTORY_API + std::to_string(projectorId);
+        http.begin(RETURN_API_HISTORY.c_str()); // Replace with your desired API endpoint
+        std::string body = "{\"proj_id\":" + std::to_string(projectorId) + ",\"user_id\":" + std::to_string(professorId) + ",\"start_date\":\"" + startDate + "\"}";
+        Serial.println(body.c_str());
+        int httpCode = http.PUT(body.c_str());
 
-      if (httpCode > 0) {
-        String payload = http.getString();
-        Serial.println("HTTP response code: " + String(httpCode));
-        Serial.println("Response data: " + payload);
-      } else {
-        Serial.println("HTTP POST request failed");
+        if (httpCode > 0) 
+        {
+          std::string payload = std::string(http.getString().c_str());
+          Serial.println("HTTP response code: " + String(httpCode));
+          response= "{\"response\":"+payload+",\"status\":"+std::to_string(httpCode)+"}#";
+        } 
+        else 
+        {
+          response= "{\"response\":{\"message\":\"Some Error happened\"},\"status\":"+std::to_string(httpCode)+"}#";
+          Serial.println(http.errorToString(httpCode).c_str());
+        }
       }
+    else
+    {
+        int projectorId = doc["projectorId"];
+        std::string endDate = doc["endDate"];
+        Serial.println(projectorId);
+        std::string idHyst = std::to_string(projectorId);
+        std::string api_endpoint = BACKEND_HISTORY_API + idHyst;
+        http.begin(api_endpoint.c_str());
+        std::string body = "{\"end_date\":\""+endDate+"\"}";
+        int httpCode = http.POST(body.c_str());
+        if (httpCode > 0) 
+        {
+          std::string payload = std::string(http.getString().c_str());
+          Serial.println("HTTP response code: " + String(httpCode));
+          response= "{\"response\":"+payload+",\"status\":"+std::to_string(httpCode)+"}#";
+        } 
+        else 
+        {
+          response= "{\"response\":{\"message\":\"Some Error happened\"},\"status\":"+std::to_string(httpCode)+"}#";
+          Serial.println(http.errorToString(httpCode).c_str());
+        }
+    }
     http.end();
   }
+  readInChunks(response,20);
   json = "";
   pCharacteristic->setValue("");
   }
