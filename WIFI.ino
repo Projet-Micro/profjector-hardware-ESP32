@@ -44,7 +44,7 @@ class MyServerCallbacks : public BLEServerCallbacks {
 
 void setup() {
   Serial.begin(115200);
-  BLEDevice::init("ESP32");
+  BLEDevice::init("PROFJECTOR_ESP32");
   Serial.println("Connecting Bluetooth...");
   BLEServer *pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
@@ -97,18 +97,23 @@ void loop() {
         http.addHeader("Content-Type", "application/json");  // Set the content type to JSON   
         std::string body = "{\"proj_id\":" + std::to_string(projectorId) + ",\"user_id\":" + std::to_string(professorId) + ",\"start_date\":\"" + startDate + "\"}";
         Serial.println(body.c_str());
-        int httpCode = http.POST(body.c_str());
-
-        if (httpCode > 0) 
+        bool apiConsumed = false;
+        while(!apiConsumed)
         {
-          std::string payload = std::string(http.getString().c_str());
-          Serial.println("HTTP response code: " + String(httpCode));
-          response= "{\"response\":"+payload+",\"status\":"+std::to_string(httpCode)+"}#";
-        } 
-        else 
-        {
-          response= "{\"response\":{\"message\":\"Some Error happened\"},\"status\":"+std::to_string(httpCode)+"}#";
-          Serial.println(http.errorToString(httpCode).c_str());
+          int httpCode = http.POST(body.c_str());
+          if (httpCode > 0) 
+          {
+            std::string payload = std::string(http.getString().c_str());
+            Serial.println("HTTP response code: " + String(httpCode));
+            response= "{\"response\":"+payload+",\"status\":"+std::to_string(httpCode)+"}#";
+            if(httpCode == 200) 
+              apiConsumed = true;
+          } 
+          else 
+          {
+            response= "{\"response\":{\"message\":\"Some Error happened\"},\"status\":"+std::to_string(httpCode)+"}#";
+            Serial.println(http.errorToString(httpCode).c_str());
+          }
         }
       }
     else
@@ -126,22 +131,26 @@ void loop() {
         http.addHeader("Content-Type", "application/json");  // Set the content type to JSON  
         http.addHeader("x-access-token",professorToken.c_str());   
         std::string body = "{\"end_date\":\""+endDate+"\"}";
-        int httpCode = http.PUT(body.c_str());
-        if (httpCode > 0) 
+        bool apiConsumed = false;
+        while(!apiConsumed)
         {
-          std::string payload = std::string(http.getString().c_str());
-          Serial.println("HTTP response code: " + String(httpCode));
-          response= "{\"response\":"+payload+",\"status\":"+std::to_string(httpCode)+"}#";
-        } 
-        else 
-        {
-          response= "{\"response\":{\"message\":\"Some Error happened\"},\"status\":"+std::to_string(httpCode)+"}#";
-          Serial.println(http.errorToString(httpCode).c_str());
+          int httpCode = http.PUT(body.c_str());
+          if (httpCode > 0) 
+          {
+            std::string payload = std::string(http.getString().c_str());
+            response= "{\"response\":"+payload+",\"status\":"+std::to_string(httpCode)+"}#";
+            if(httpCode == 200) 
+              apiConsumed = true;
+          } 
+          else 
+          {
+            response= "{\"response\":{\"message\":\"Some Error happened\"},\"status\":"+std::to_string(httpCode)+"}#";
+            Serial.println(http.errorToString(httpCode).c_str());
+          }
         }
     }
     http.end();
   }
-  delay(5000);
   readInChunks(response,20);
   json = "";
   pCharacteristic->setValue("");
