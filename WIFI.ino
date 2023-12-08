@@ -81,9 +81,10 @@ void loop() {
         return;
       }
       bool rent = doc["rent"];
+      Serial.println(rent);
       if (WiFi.status() == WL_CONNECTED) {
       HTTPClient http;
-      http.setTimeout(20000); 
+      http.setTimeout(6000); 
       if(!rent)
       {
 
@@ -98,19 +99,23 @@ void loop() {
         std::string body = "{\"proj_id\":" + std::to_string(projectorId) + ",\"user_id\":" + std::to_string(professorId) + ",\"start_date\":\"" + startDate + "\"}";
         Serial.println(body.c_str());
         bool apiConsumed = false;
-        while(!apiConsumed)
+        int nbRetries = 0;
+        while(!apiConsumed && nbRetries < 3)
         {
           int httpCode = http.POST(body.c_str());
           if (httpCode > 0) 
-          {
+          { 
             std::string payload = std::string(http.getString().c_str());
             Serial.println("HTTP response code: " + String(httpCode));
             response= "{\"response\":"+payload+",\"status\":"+std::to_string(httpCode)+"}#";
             if(httpCode == 200) 
               apiConsumed = true;
+            else
+               nbRetries++;
           } 
           else 
           {
+            nbRetries++;
             response= "{\"response\":{\"message\":\"Some Error happened\"},\"status\":"+std::to_string(httpCode)+"}#";
             Serial.println(http.errorToString(httpCode).c_str());
           }
@@ -132,7 +137,8 @@ void loop() {
         http.addHeader("x-access-token",professorToken.c_str());   
         std::string body = "{\"end_date\":\""+endDate+"\"}";
         bool apiConsumed = false;
-        while(!apiConsumed)
+        int nbRetries = 0;
+        while(!apiConsumed && nbRetries < 3)
         {
           int httpCode = http.PUT(body.c_str());
           if (httpCode > 0) 
@@ -141,9 +147,12 @@ void loop() {
             response= "{\"response\":"+payload+",\"status\":"+std::to_string(httpCode)+"}#";
             if(httpCode == 200) 
               apiConsumed = true;
+            else
+               nbRetries++;
           } 
           else 
           {
+            nbRetries++;
             response= "{\"response\":{\"message\":\"Some Error happened\"},\"status\":"+std::to_string(httpCode)+"}#";
             Serial.println(http.errorToString(httpCode).c_str());
           }
